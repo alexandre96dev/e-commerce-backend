@@ -16,8 +16,13 @@ async function bootstrap() {
     }),
   );
   app.use(cookieParser());
+
+  const allowedOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',')
+    : ['http://localhost:3000'];
+
   app.enableCors({
-    origin: ['http://localhost:3000', 'https://e-commerce-frontend-production-5811.up.railway.app'],
+    origin: allowedOrigins,
     credentials: true,
   });
 

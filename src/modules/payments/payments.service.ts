@@ -13,14 +13,27 @@ import { MailService } from '../mail/mail.service';
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
-  private readonly stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
-    apiVersion: '2025-02-24.acacia',
-  });
+  private stripeClient: Stripe | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
-  ) {}
+  ) {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      this.logger.warn('STRIPE_SECRET_KEY nao configurada; pagamentos Stripe indisponiveis');
+    }
+  }
+
+  private getStripeClient() {
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeSecretKey) {
+      throw new ServiceUnavailableException('Gateway Stripe nao configurado');
+    }
+    if (!this.stripeClient) {
+      this.stripeClient = new Stripe(stripeSecretKey);
+    }
+    return this.stripeClient;
+  }
 
   async createCheckoutSession(orderId: string, userId: string) {
     const order = await this.prisma.order.findUnique({
@@ -51,7 +64,8 @@ export class PaymentsService {
 
     let session: Stripe.Checkout.Session;
     try {
-      session = await this.stripe.checkout.sessions.create({
+      const stripe = this.getStripeClient();
+      session = await stripe.checkout.sessions.create({
         mode: 'payment',
         line_items: lineItems,
         success_url: process.env.STRIPE_SUCCESS_URL ?? 'http://localhost:3000/checkout/success',
@@ -61,8 +75,14 @@ export class PaymentsService {
           userId,
         },
       });
-    } catch {
+    } catch (err) {
+      this.logger.error(`Falha ao criar sessao Stripe: ${err}`);
       throw new ServiceUnavailableException('Gateway de pagamento indisponivel no momento');
+    }
+
+    if (!session.url) {
+      this.logger.error(`Sessao Stripe criada sem URL: ${session.id}`);
+      throw new ServiceUnavailableException('Gateway de pagamento nao retornou URL de checkout');
     }
 
     await this.prisma.order.update({
@@ -88,8 +108,12 @@ export class PaymentsService {
 
     let event: Stripe.Event;
     try {
-      event = this.stripe.webhooks.constructEvent(body, sig, secret);
-    } catch {
+      const stripe = this.getStripeClient();
+      event = stripe.webhooks.constructEvent(body, sig, secret);
+    } catch (err) {
+      if (err instanceof ServiceUnavailableException) {
+        throw err;
+      }
       throw new BadRequestException('Assinatura de webhook invalida');
     }
 
@@ -156,14 +180,10 @@ export class PaymentsService {
       });
 
       if (emailRecipient) {
-        try {
-          await this.mailService.sendTemplate(emailRecipient, 'payment_approved', {
-            orderId,
-            paymentIntent: emailPaymentIntent,
-          });
-        } catch (err) {
-          this.logger.warn(`Falha ao enviar email de pagamento aprovado: ${err}`);
-        }
+        this.mailService.sendTemplate(emailRecipient, 'payment_approved', {
+          orderId,
+          paymentIntent: emailPaymentIntent,
+        }).catch((err) => this.logger.warn(`Falha ao enviar email de pagamento aprovado: ${err}`));
       }
     }
 
@@ -188,17 +208,14 @@ export class PaymentsService {
         }),
       ]);
 
-      try {
-        const user = await this.prisma.user.findUnique({ where: { id: order.userId } });
+      this.prisma.user.findUnique({ where: { id: order.userId } }).then((user) => {
         if (user) {
-          await this.mailService.sendTemplate(user.email, 'payment_failed', {
+          this.mailService.sendTemplate(user.email, 'payment_failed', {
             orderId: order.id,
             paymentIntent: intent.id,
-          });
+          }).catch((err) => this.logger.warn(`Falha ao enviar email de pagamento recusado: ${err}`));
         }
-      } catch (err) {
-        this.logger.warn(`Falha ao enviar email de pagamento recusado: ${err}`);
-      }
+      }).catch((err) => this.logger.warn(`Falha ao buscar usuario para email: ${err}`));
     }
   }
 }

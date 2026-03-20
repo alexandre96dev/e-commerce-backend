@@ -115,17 +115,14 @@ export class OrdersService {
       return createdOrder;
     });
 
-    try {
-      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    this.prisma.user.findUnique({ where: { id: userId } }).then((user) => {
       if (user) {
-        await this.mailService.sendTemplate(user.email, 'order_received', {
+        this.mailService.sendTemplate(user.email, 'order_received', {
           orderId: order.id,
           totalCents: order.totalCents,
-        });
+        }).catch((err) => this.logger.warn(`Falha ao enviar email de pedido recebido: ${err}`));
       }
-    } catch (err) {
-      this.logger.warn(`Falha ao enviar email de pedido recebido: ${err}`);
-    }
+    }).catch((err) => this.logger.warn(`Falha ao buscar usuario para email: ${err}`));
 
     return order;
   }
