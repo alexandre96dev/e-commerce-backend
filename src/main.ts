@@ -17,7 +17,7 @@ async function bootstrap() {
   );
   app.use(cookieParser());
   app.enableCors({
-    origin: ['http://localhost:3000'],
+    origin: ['http://localhost:3000', 'https://e-commerce-frontend-production-5811.up.railway.app'],
     credentials: true,
   });
 
