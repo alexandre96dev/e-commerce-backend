@@ -546,16 +546,20 @@ export class AdminController {
     metadata: unknown,
     req: Request,
   ) {
-    await this.prisma.auditLog.create({
-      data: {
-        actorId,
-        action,
-        resource,
-        resourceId: resourceId ?? undefined,
-        ip: req.ip,
-        userAgent: req.headers['user-agent'] ?? null,
-        metadata: metadata === undefined ? undefined : JSON.parse(JSON.stringify(metadata)),
-      },
-    });
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          actorId,
+          action,
+          resource,
+          resourceId: resourceId ?? undefined,
+          ip: req.ip ?? req.socket?.remoteAddress ?? null,
+          userAgent: req.headers['user-agent'] ?? null,
+          metadata: metadata === undefined ? undefined : JSON.parse(JSON.stringify(metadata)),
+        },
+      });
+    } catch (err) {
+      this.logger.warn(`logAudit falhou [${action}/${resource}]: ${err}`);
+    }
   }
 }
