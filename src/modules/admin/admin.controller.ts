@@ -179,14 +179,14 @@ export class AdminController {
       throw err;
     }
 
-    await this.logAudit(
+    this.logAudit(
       user.sub,
       'ORDER_STATUS_UPDATED',
       'order',
       order.id,
       { from: currentOrder.status, to: body.status, trackingCode: body.trackingCode },
       req,
-    );
+    ).catch((err) => this.logger.warn(`Falha ao gravar auditoria: ${err}`));
 
     if (body.status === 'shipped') {
       const orderUser = await this.prisma.user.findUnique({ where: { id: order.userId } });
@@ -267,14 +267,14 @@ export class AdminController {
       include: { images: true },
     });
 
-    await this.logAudit(
+    this.logAudit(
       user.sub,
       'PRODUCT_CREATED',
       'product',
       created.id,
       { name: created.name, sku: created.sku },
       req,
-    );
+    ).catch((err) => this.logger.warn(`Falha ao gravar auditoria: ${err}`));
     return created;
   }
 
@@ -286,7 +286,7 @@ export class AdminController {
     @Req() req: Request,
   ) {
     const updated = await this.prisma.product.update({ where: { id: productId }, data: body });
-    await this.logAudit(user.sub, 'PRODUCT_UPDATED', 'product', updated.id, body, req);
+    this.logAudit(user.sub, 'PRODUCT_UPDATED', 'product', updated.id, body, req).catch((err) => this.logger.warn(`Falha ao gravar auditoria: ${err}`));
     return updated;
   }
 
@@ -297,7 +297,7 @@ export class AdminController {
     @Req() req: Request,
   ) {
     const updated = await this.prisma.product.update({ where: { id: productId }, data: { isActive: false } });
-    await this.logAudit(user.sub, 'PRODUCT_DEACTIVATED', 'product', updated.id, undefined, req);
+    this.logAudit(user.sub, 'PRODUCT_DEACTIVATED', 'product', updated.id, undefined, req).catch((err) => this.logger.warn(`Falha ao gravar auditoria: ${err}`));
     return updated;
   }
 
@@ -321,7 +321,7 @@ export class AdminController {
       },
     });
 
-    await this.logAudit(user.sub, 'CATEGORY_CREATED', 'category', created.id, { name: created.name }, req);
+    this.logAudit(user.sub, 'CATEGORY_CREATED', 'category', created.id, { name: created.name }, req).catch((err) => this.logger.warn(`Falha ao gravar auditoria: ${err}`));
     return created;
   }
 
@@ -333,7 +333,7 @@ export class AdminController {
     @Req() req: Request,
   ) {
     const updated = await this.prisma.category.update({ where: { id: categoryId }, data: body });
-    await this.logAudit(user.sub, 'CATEGORY_UPDATED', 'category', updated.id, body, req);
+    this.logAudit(user.sub, 'CATEGORY_UPDATED', 'category', updated.id, body, req).catch((err) => this.logger.warn(`Falha ao gravar auditoria: ${err}`));
     return updated;
   }
 
@@ -344,7 +344,7 @@ export class AdminController {
     @Req() req: Request,
   ) {
     const updated = await this.prisma.category.update({ where: { id: categoryId }, data: { isActive: false } });
-    await this.logAudit(user.sub, 'CATEGORY_DEACTIVATED', 'category', updated.id, undefined, req);
+    this.logAudit(user.sub, 'CATEGORY_DEACTIVATED', 'category', updated.id, undefined, req).catch((err) => this.logger.warn(`Falha ao gravar auditoria: ${err}`));
     return updated;
   }
 
@@ -389,7 +389,7 @@ export class AdminController {
       },
     });
 
-    await this.logAudit(user.sub, 'COUPON_CREATED', 'coupon', created.id, { code: created.code }, req);
+    this.logAudit(user.sub, 'COUPON_CREATED', 'coupon', created.id, { code: created.code }, req).catch((err) => this.logger.warn(`Falha ao gravar auditoria: ${err}`));
     return created;
   }
 
@@ -409,7 +409,7 @@ export class AdminController {
       },
     });
 
-    await this.logAudit(user.sub, 'COUPON_UPDATED', 'coupon', updated.id, body, req);
+    this.logAudit(user.sub, 'COUPON_UPDATED', 'coupon', updated.id, body, req).catch((err) => this.logger.warn(`Falha ao gravar auditoria: ${err}`));
     return updated;
   }
 
@@ -469,11 +469,11 @@ export class AdminController {
       select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
     });
 
-    await this.logAudit(currentUser.sub, 'USER_CREATED', 'user', user.id, {
+    this.logAudit(currentUser.sub, 'USER_CREATED', 'user', user.id, {
       name: user.name,
       email: user.email,
       role: user.role,
-    }, req);
+    }, req).catch((err) => this.logger.warn(`Falha ao gravar auditoria: ${err}`));
 
     return user;
   }
@@ -502,10 +502,10 @@ export class AdminController {
     }
 
     const updated = await this.prisma.user.update({ where: { id: userId }, data: { role: body.role } });
-    await this.logAudit(currentUser.sub, 'USER_ROLE_UPDATED', 'user', updated.id, {
+    this.logAudit(currentUser.sub, 'USER_ROLE_UPDATED', 'user', updated.id, {
       from: targetUser.role,
       to: updated.role,
-    }, req);
+    }, req).catch((err) => this.logger.warn(`Falha ao gravar auditoria: ${err}`));
     return updated;
   }
 
