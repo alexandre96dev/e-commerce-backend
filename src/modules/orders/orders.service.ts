@@ -76,6 +76,12 @@ export class OrdersService {
               totalPriceCents: item.total,
             })),
           },
+          events: {
+            create: {
+              status: OrderStatus.pending,
+              description: 'Pedido criado e aguardando pagamento',
+            },
+          },
         },
         include: { items: true },
       });
@@ -133,10 +139,11 @@ export class OrdersService {
       include: {
         items: {
           include: {
-            product: { select: { slug: true, name: true } },
+            product: { select: { slug: true, name: true, images: { take: 1, orderBy: { position: 'asc' } } } },
           },
         },
         payment: true,
+        events: { orderBy: { createdAt: 'asc' } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -145,7 +152,15 @@ export class OrdersService {
   async detail(userId: string, orderId: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: { items: true, payment: true },
+      include: {
+        items: {
+          include: {
+            product: { select: { slug: true, name: true, images: { take: 1, orderBy: { position: 'asc' } } } },
+          },
+        },
+        payment: true,
+        events: { orderBy: { createdAt: 'asc' } },
+      },
     });
 
     if (!order || order.userId !== userId) {

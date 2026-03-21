@@ -175,6 +175,14 @@ export class PaymentsService {
           },
         });
 
+        await tx.orderEvent.create({
+          data: {
+            orderId,
+            status: OrderStatus.paid,
+            description: 'Pagamento confirmado via Stripe',
+          },
+        });
+
         emailRecipient = order.user.email;
         emailPaymentIntent = session.payment_intent?.toString() ?? null;
       });

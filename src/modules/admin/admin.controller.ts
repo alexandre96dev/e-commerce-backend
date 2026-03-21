@@ -138,9 +138,31 @@ export class AdminController {
       );
     }
 
-    const order = await this.prisma.order.update({
-      where: { id: orderId },
-      data: { status: body.status },
+    const EVENT_DESCRIPTIONS: Record<string, string> = {
+      processing: 'Pedido em preparacao',
+      shipped: 'Pedido enviado',
+      delivered: 'Pedido entregue',
+      canceled: 'Pedido cancelado',
+    };
+
+    const order = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: body.status,
+          ...(body.trackingCode ? { trackingCode: body.trackingCode } : {}),
+        },
+      });
+
+      await tx.orderEvent.create({
+        data: {
+          orderId,
+          status: body.status,
+          description: body.description || EVENT_DESCRIPTIONS[body.status] || `Status alterado para ${body.status}`,
+        },
+      });
+
+      return updated;
     });
 
     await this.logAudit(
@@ -148,20 +170,17 @@ export class AdminController {
       'ORDER_STATUS_UPDATED',
       'order',
       order.id,
-      { from: currentOrder.status, to: body.status },
+      { from: currentOrder.status, to: body.status, trackingCode: body.trackingCode },
       req,
     );
 
     if (body.status === 'shipped') {
-      try {
-        const orderUser = await this.prisma.user.findUnique({ where: { id: order.userId } });
-        if (orderUser) {
-          await this.mailService.sendTemplate(orderUser.email, 'order_shipped', {
-            orderId: order.id,
-          });
-        }
-      } catch {
-        // Email e best-effort, nao bloqueia a transicao de status
+      const orderUser = await this.prisma.user.findUnique({ where: { id: order.userId } });
+      if (orderUser) {
+        this.mailService.sendTemplate(orderUser.email, 'order_shipped', {
+          orderId: order.id,
+          trackingCode: body.trackingCode,
+        }).catch(() => {});
       }
     }
 

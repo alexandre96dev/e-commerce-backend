@@ -253,6 +253,7 @@ model Order {
   addressId           String?
   couponId            String?
   status              OrderStatus  @default(pending)
+  trackingCode        String?
   subtotalCents       Int
   discountCents       Int          @default(0)
   shippingCents       Int          @default(0)
@@ -268,6 +269,7 @@ model Order {
   coupon              Coupon?      @relation(fields: [couponId], references: [id], onDelete: SetNull)
   items               OrderItem[]
   payment             Payment?
+  events              OrderEvent[]
 
   @@index([userId])
   @@index([status])
@@ -288,6 +290,18 @@ model OrderItem {
 
   @@index([orderId])
   @@index([productId])
+}
+
+model OrderEvent {
+  id            String      @id @default(cuid())
+  orderId       String
+  status        OrderStatus
+  description   String?
+  createdAt     DateTime    @default(now())
+
+  order         Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
 }
 
 model Payment {
