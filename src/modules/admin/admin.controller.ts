@@ -6,6 +6,7 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  Logger,
   Param,
   Patch,
   Post,
@@ -44,6 +45,8 @@ function slugify(value: string): string {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
 export class AdminController {
+  private readonly logger = new Logger(AdminController.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
@@ -145,25 +148,31 @@ export class AdminController {
       canceled: 'Pedido cancelado',
     };
 
-    const order = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.order.update({
-        where: { id: orderId },
-        data: {
-          status: body.status,
-          ...(body.trackingCode ? { trackingCode: body.trackingCode } : {}),
-        },
-      });
+    let order;
+    try {
+      order = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.order.update({
+          where: { id: orderId },
+          data: {
+            status: body.status,
+            ...(body.trackingCode ? { trackingCode: body.trackingCode } : {}),
+          },
+        });
 
-      await tx.orderEvent.create({
-        data: {
-          orderId,
-          status: body.status,
-          description: body.description || EVENT_DESCRIPTIONS[body.status] || `Status alterado para ${body.status}`,
-        },
-      });
+        await tx.orderEvent.create({
+          data: {
+            orderId,
+            status: body.status,
+            description: body.description || EVENT_DESCRIPTIONS[body.status] || `Status alterado para ${body.status}`,
+          },
+        });
 
-      return updated;
-    });
+        return updated;
+      });
+    } catch (err) {
+      this.logger.error(`Falha ao atualizar status do pedido ${orderId}: ${err}`);
+      throw err;
+    }
 
     await this.logAudit(
       user.sub,
